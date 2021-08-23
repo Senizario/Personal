@@ -3,8 +3,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using UnityEngine;
 using UnityEditor;
+using UnityEngine;
 
 namespace Attributes
 {
@@ -30,15 +30,15 @@ namespace Attributes
 
             List<object> properties = new List<object>();
 
-            SerializedProperty property = serializedObject.GetIterator();
+            SerializedProperty iterator = serializedObject.GetIterator();
 
-            if (property.NextVisible(true))
+            if (iterator.NextVisible(true))
             {
                 do
                 {
-                    AddProperty(properties, property);
+                    AddProperty(properties, iterator);
                 }
-                while (property.NextVisible(false));
+                while (iterator.NextVisible(false));
             }
 
             this.properties = properties;
@@ -61,7 +61,6 @@ namespace Attributes
                         if ((string)properties[i] == "m_Script")
                             GUI.enabled = false;
 
-
                         if ((string)properties[i] == "folders")
                             continue;
 
@@ -71,7 +70,13 @@ namespace Attributes
                             GUI.enabled = true;
                     }
                     else
-                        ShowFolder((Folder)properties[i]);
+                    {
+                        EditorGUILayout.Space();
+
+                        GUI.skin.window.padding.top = GUI.skin.window.padding.top - 16;
+
+                        ShowFolder((Folder)properties[i], true);
+                    }
                 }
             }
 
@@ -80,42 +85,35 @@ namespace Attributes
 
         void AddProperty(List<object> properties, SerializedProperty property)
         {
-            bool scriptProperty = property.name.Equals("m_Script") && property.type.Equals("PPtr<MonoScript>") && property.propertyType == SerializedPropertyType.ObjectReference;
+            Foldout foldout = null;
 
-            if (scriptProperty)
-                properties.Add(property.name);
-            else
+            object[] attributes = GetPropertyAttributes<PropertyAttribute>(property);
+
+            if (attributes != null)
             {
-                Foldout foldout = null;
-
-                object[] attributes = GetPropertyAttributes<PropertyAttribute>(property);
-
-                if (attributes != null)
+                foreach (object attribute in attributes)
                 {
-                    foreach (object attribute in attributes)
+                    if (attribute is Foldout)
                     {
-                        if (attribute is Foldout)
-                        {
-                            foldout = (Foldout)attribute;
+                        foldout = (Foldout)attribute;
 
-                            break;
-                        }
+                        break;
                     }
                 }
+            }
 
-                if (foldout == null)
-                    properties.Add(property.name);
+            if (foldout == null)
+                properties.Add(property.propertyPath);
+            else
+            {
+                string[] path = foldout.name.Split('/');
+
+                Folder folder = GetFolder(properties, path);
+
+                if (folder == null)
+                    CreateFolder(properties, path, property);
                 else
-                {
-                    string[] path = foldout.name.Split('/');
-
-                    Folder folder = GetFolder(properties, path);
-
-                    if (folder == null)
-                        CreateFolder(properties, path, property);
-                    else
-                        folder.properties.Add(property.name);
-                }
+                    folder.properties.Add(property.propertyPath);
             }
         }
 
@@ -183,7 +181,7 @@ namespace Attributes
                     if (i < path.Length - 1)
                         nexFolder = new Folder(path[i]);
                     else
-                        nexFolder = new Folder(path[i], property.name);
+                        nexFolder = new Folder(path[i], property.propertyPath);
 
                     Folder oldFolder = GetFolder(this.properties, path.Take(i + 1).ToArray());
 
@@ -203,16 +201,18 @@ namespace Attributes
             }
         }
 
-        void ShowFolder(Folder folder)
+        void ShowFolder(Folder folder, bool isRoot)
         {
-            GUIStyle foldoutStyle = new GUIStyle(EditorStyles.foldout)
-            {
-                fontStyle = FontStyle.Bold
-            };
+            GUILayout.BeginHorizontal();
 
-            bool isExpanded = EditorGUILayout.Foldout(folder.isExpanded, folder.name, foldoutStyle);
+            if(!isRoot)
+                GUILayout.Space(16f);
 
-            if(isExpanded != folder.isExpanded)
+            EditorGUILayout.BeginVertical((GUIStyle)"HelpBox");
+
+            bool isExpanded = GUILayout.Toggle(folder.isExpanded, folder.name, "foldout");
+
+            if (isExpanded != folder.isExpanded)
             {
                 folder.isExpanded = isExpanded;
 
@@ -221,18 +221,31 @@ namespace Attributes
 
             if (folder.isExpanded)
             {
-                EditorGUI.indentLevel++;
-
                 for (int i = 0; i < folder.properties.Count; i++)
                 {
                     if (folder.properties[i] is string)
-                        EditorGUILayout.PropertyField(serializedObject.FindProperty((string)folder.properties[i]), serializedObject.FindProperty((string)folder.properties[i]).isExpanded);
-                    else
-                        ShowFolder((Folder)folder.properties[i]);
-                }
+                    {
+                        GUILayout.BeginHorizontal();
 
-                EditorGUI.indentLevel--;
+                        GUILayout.Space(16f);
+
+                        if (serializedObject.FindProperty((string)folder.properties[i]).propertyType == SerializedPropertyType.Generic)
+                        {
+                            GUILayout.Space(16f);
+                        }
+
+                        EditorGUILayout.PropertyField(serializedObject.FindProperty((string)folder.properties[i]), serializedObject.FindProperty((string)folder.properties[i]).isExpanded);
+
+                        EditorGUILayout.EndHorizontal();
+                    }
+                    else
+                        ShowFolder((Folder)folder.properties[i], false);
+                }
             }
+
+            EditorGUILayout.EndVertical();
+
+            EditorGUILayout.EndHorizontal();
         }
 
         void SerializeFolders(List<object> properties)

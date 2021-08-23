@@ -21,14 +21,14 @@ namespace Attributes
             properties = new List<object>();
         }
 
-        public Folder(string name, int fontSize = 0)
+        public Folder(string name)
         {
             this.name = name;
 
             properties = new List<object>();
         }
 
-        public Folder(string name, string property, int fontSize = 0)
+        public Folder(string name, string property)
         {
             this.name = name;
 
