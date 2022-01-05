@@ -64,7 +64,7 @@ namespace Attributes
                         if ((string)properties[i] == "folders")
                             continue;
 
-                        EditorGUILayout.PropertyField(serializedObject.FindProperty((string)properties[i]), serializedObject.FindProperty((string)properties[i]).isExpanded);
+                        EditorGUILayout.PropertyField(serializedObject.FindProperty((string)properties[i]), true);
 
                         if (!GUI.enabled)
                             GUI.enabled = true;
@@ -234,7 +234,7 @@ namespace Attributes
                             GUILayout.Space(16f);
                         }
 
-                        EditorGUILayout.PropertyField(serializedObject.FindProperty((string)folder.properties[i]), serializedObject.FindProperty((string)folder.properties[i]).isExpanded);
+                        EditorGUILayout.PropertyField(serializedObject.FindProperty((string)folder.properties[i]), true);
 
                         EditorGUILayout.EndHorizontal();
                     }

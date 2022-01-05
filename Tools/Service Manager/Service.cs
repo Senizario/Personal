@@ -11,6 +11,11 @@ public class Service
     {
         get => gameObject;
     }
+    [SerializeField] Type type;
+    public Type _type
+    {
+        get => type;
+    }
     [SerializeField] Component component;
     public Component _component
     {
@@ -22,6 +27,8 @@ public class Service
     public Service(GameObject gameObject, Component component)
     {
         this.gameObject = gameObject;
+
+        type = component.GetType();
 
         this.component = component;
     }
