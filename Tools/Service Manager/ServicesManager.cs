@@ -9,9 +9,27 @@ namespace Tools.ServicesManager
     {
         #region Singleton
         static ServicesManager instance;
-        public static ServicesManager _Instance
+        public static ServicesManager _instance
         {
-            get => instance;
+            get
+            {
+                if (instance == null)
+                {
+                    instance = FindObjectOfType<ServicesManager>();
+
+                    if (instance != null)
+                    {
+                        if (instance.gameObject.transform.parent != null)
+                            instance.gameObject.transform.SetParent(null, true);
+
+                        DontDestroyOnLoad(instance.gameObject);
+                    }
+                    else
+                        Debug.Log("ServicesManager not found");
+                }
+
+                return instance;
+            }
             set
             {
                 if (instance == null)
@@ -23,7 +41,7 @@ namespace Tools.ServicesManager
 
                     DontDestroyOnLoad(instance.gameObject);
                 }
-                else if (instance != value)
+                else if (value != instance)
                     Destroy(value.gameObject);
             }
         }
@@ -63,17 +81,17 @@ namespace Tools.ServicesManager
                     Debug.Log($"GameObject {i} is empty");
             }
 
-            _Instance = this;
+            _instance = this;
         }
 
         void OnEnable()
         {
-            SceneManager.sceneUnloaded += SceneUnloaded;
+            SceneManager.sceneUnloaded += Clean;
         }
 
         void OnDisable()
         {
-            SceneManager.sceneUnloaded -= SceneUnloaded;
+            SceneManager.sceneUnloaded -= Clean;
         }
 
         public void Register<T>(T service, bool permanent = false) where T : Component
@@ -129,7 +147,7 @@ namespace Tools.ServicesManager
             }
         }
 
-        void SceneUnloaded(Scene scene)
+        public void Clean(Scene scene)
         {
             for (int i = 0; i < services.Count; i++)
             {

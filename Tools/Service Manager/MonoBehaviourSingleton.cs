@@ -7,15 +7,14 @@ namespace Tools.ServicesManager
     {
         #region Information
         [Foldout("Information")]
-        [SerializeField] protected RegisterOn registerOn;     
+        [SerializeField] protected RegisterOn registerOn;
         [Foldout("Information")]
         [SerializeField] protected bool permanent;
         #endregion
-        
 
         protected virtual void Awake()
         {
-            if(registerOn == RegisterOn.awake)
+            if (registerOn == RegisterOn.awake)
                 ServicesManager._instance.Register(this as T, permanent);
         }
 
