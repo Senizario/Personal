@@ -3,11 +3,11 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace Tools.SingletonsManager
+namespace Utilities
 {
     public class SingletonsManager : MonoBehaviour
     {
-        #region Singleton
+        #region Variables & Properties
 
         static SingletonsManager instance;
         public static SingletonsManager _instance
@@ -19,16 +19,23 @@ namespace Tools.SingletonsManager
                     instance = FindObjectOfType<SingletonsManager>();
 
                     if (instance == null)
-                        instance = new GameObject("Singletons Manager", typeof(SingletonsManager)).GetComponent<SingletonsManager>();    
+                    {
+                        SingletonsManager prefab = Resources.Load<SingletonsManager>("Singletons Manager");
+
+                        if (prefab != null)
+                            instance = Instantiate(prefab);
+                        else
+                            instance = new GameObject("Singletons Manager", typeof(SingletonsManager)).GetComponent<SingletonsManager>();
+                    }
                     else
                     {
                         if (instance.gameObject.transform.parent != null)
                             instance.gameObject.transform.SetParent(null, true);
                     }
 
-					instance.RegisterMonoBehaviours();
+                    instance.RegisterMonoBehaviours();
 
-					DontDestroyOnLoad(instance.gameObject);
+                    DontDestroyOnLoad(instance.gameObject);                 
                 }
 
                 return instance;
@@ -42,28 +49,21 @@ namespace Tools.SingletonsManager
                     if (instance.gameObject.transform.parent != null)
                         instance.gameObject.transform.SetParent(null, true);
 
+                    instance.RegisterMonoBehaviours();
+
                     DontDestroyOnLoad(instance.gameObject);
                 }
                 else if (value != instance)
                     Destroy(value.gameObject);
             }
         }
+        [SerializeField] List<SingletonData> singletonsData;
+        Dictionary<Type, MonoBehaviour> _singletons { get; set; }
 
         #endregion
 
-        #region Fields & Properties
-
-        [SerializeField] List<Singleton> singletons;
-		Dictionary<Type, Singleton> _singletons { get; set; }
-		bool monoBehavioursAreRegisted;
-
-		#endregion
-
-		void Awake()
+        void Awake()
         {
-            if (!monoBehavioursAreRegisted)
-                RegisterMonoBehaviours();
-
             _instance = this;
         }
 
@@ -77,111 +77,158 @@ namespace Tools.SingletonsManager
             SceneManager.sceneUnloaded -= Clean;
         }
 
-		public void RegisterMonoBehaviours()
-		{
-			_singletons = new Dictionary<Type, Singleton>();
+        public bool Contains(Type type)
+        {
+            return _singletons.ContainsKey(type);
+        }
 
-            if (singletons == null)
-                singletons = new List<Singleton>();
+        public void RegisterMonoBehaviours()
+        {
+            _singletons = new Dictionary<Type, MonoBehaviour>();
 
-			for (int i = 0; i < singletons.Count; i++)
-			{
-				if (singletons[i]._gameObject != null)
-				{
-					if (singletons[i]._monoBehaviour != null)
-					{
-						Type type = singletons[i]._monoBehaviour.GetType();
+            if (singletonsData == null)
+                singletonsData = new List<SingletonData>();
+
+            for (int i = 0; i < singletonsData.Count; i++)
+            {
+                SingletonData singletonData = singletonsData[i];
+
+                if (singletonData._type != SingletonData._defaultType)
+                {
+                    GameObject singletonGameObject = singletonData._gameObject;
+
+                    if (singletonGameObject != null)
+                    {
+                        if (singletonGameObject.scene != gameObject.scene)
+                        {
+                            GameObject singletonPrefab = singletonGameObject;
+
+                            singletonGameObject = singletonData._gameObject = Instantiate(singletonPrefab);
+
+                            singletonGameObject.transform.SetParent(gameObject.transform);
+
+                            for (int j = i + 1; j < singletonsData.Count; j++)
+                            {
+                                SingletonData nextSingletonData = singletonsData[j];
+
+                                if (nextSingletonData._type != SingletonData._defaultType)
+                                {
+                                    GameObject nextSingletonGameObject = nextSingletonData._gameObject;
+
+                                    if (nextSingletonGameObject != null
+                                        &&
+                                        nextSingletonGameObject == singletonPrefab)
+                                        nextSingletonData._gameObject = singletonGameObject;
+                                }
+                            }
+                        }
+
+                        Type type = Type.GetType(singletonData._type);
 
                         if (!_singletons.ContainsKey(type))
                         {
-                            _singletons.Add(type, singletons[i]);
+                            Component component = singletonGameObject.GetComponent(type);
 
-                            if (singletons[i]._monoBehaviour is MonoBehaviourSingleton monoBehaviourSingleton)
-                                monoBehaviourSingleton.OnRegister();
-						}
-					}
-					else
-						Debug.LogWarning($"SingletonsManager/RegisterMonoBehaviours/Singletons[{i}]._monoBehaviour = null");
-				}
-				else
-					Debug.LogWarning($"SingletonsManager/RegisterMonoBehaviours/Singletons[{i}]._gameObject = null");
-			}
+                            if (component != null)
+                            {
+                                MonoBehaviour monoBehaviour = (MonoBehaviour)component;
 
-			monoBehavioursAreRegisted = true;
-		}
+                                _singletons.Add(type, monoBehaviour);
 
-		public void RegisterMonoBehaviourAsSingleton<T>(T monoBehaviour, bool permanent = false) where T : UnityEngine.MonoBehaviour
-        {
-            Type type = monoBehaviour.GetType();
-
-			if (!_singletons.ContainsKey(type))
-            {
-                Singleton singleton = new Singleton(monoBehaviour.gameObject, monoBehaviour);
-
-                singletons.Add(singleton);
-
-                _singletons.Add(type, singleton);
-
-				if (singleton._monoBehaviour is MonoBehaviourSingleton monoBehaviourSingleton)
-					monoBehaviourSingleton.OnRegister();
-
-				if (permanent)
-                    singleton._gameObject.transform.SetParent(gameObject.transform);
-            }
-		}
-
-        public T GetSingleton<T>() where T : UnityEngine.MonoBehaviour
-        {
-            Type type = typeof(T);
-
-			if (_singletons.TryGetValue(type, out Singleton singleton))
-                return (T)singleton._monoBehaviour;
-            else
-            {
-                T[] monoBehavious = FindObjectsByType<T>(FindObjectsSortMode.None);
-
-                if (monoBehavious.Length == 0)
-                {
-                    Debug.LogWarning($"SingletonsManager/GetSingleton<{type}>/No MonoBehaviour whit this type was found in the scene");
-
-                    return null;
+                                if (monoBehaviour is MonoBehaviourSingleton monoBehaviourSingleton)
+                                    monoBehaviourSingleton.OnRegister();
+                            }
+                            else
+                            {
+#if UNITY_EDITOR
+                                Debug.LogWarning($"SingletonsManager/RegisterMonoBehaviours/Singleton:{singletonData._type}, The game object not has this mono behaviour type");
+#endif
+                            }
+                        }
+                    }
+                    else
+                    {
+#if UNITY_EDITOR
+                        Debug.LogWarning($"SingletonsManager/RegisterMonoBehaviours/Singleton:{singletonData._type}, Game object = null");
+#endif
+                    }
                 }
-
-                if (monoBehavious.Length > 1)
-                {
-                    Debug.LogWarning($"SingletonsManager/GetSingleton<{type}>/More than one MonoBehaviour whit this type was found in the scene");
-
-                    return null;
-                }
-
-                RegisterMonoBehaviourAsSingleton(monoBehavious[0], (monoBehavious[0] is MonoBehaviourSingleton monoBehaviourSingleton) ? monoBehaviourSingleton._permanent: false);
-
-                return monoBehavious[0];
             }
         }
 
-        public void Clean(Scene scene)
+        public void RegisterMonoBehaviourAsSingleton<T>(T monoBehaviour, bool permanent = false) where T : MonoBehaviour
         {
-            for (int i = 0; i < singletons.Count; i++)
+            Type type = monoBehaviour.GetType();
+
+            if (!_singletons.ContainsKey(type))
             {
-                if (!singletons[i]._monoBehaviour)
+                SingletonData singletonData = new SingletonData(type.AssemblyQualifiedName, monoBehaviour.gameObject);
+
+                singletonsData.Add(singletonData);
+
+                _singletons.Add(type, monoBehaviour);
+
+                if (permanent)
+                    monoBehaviour.gameObject.transform.SetParent(gameObject.transform);
+
+                if (monoBehaviour is MonoBehaviourSingleton monoBehaviourSingleton)
+                    monoBehaviourSingleton.OnRegister();
+            }
+        }
+
+        public T GetSingleton<T>() where T : MonoBehaviour
+        {
+            Type type = typeof(T);
+
+            if (_singletons.TryGetValue(type, out MonoBehaviour monoBehaviour))
+                return (T)monoBehaviour;
+            else
+            {
+                foreach (KeyValuePair<Type, MonoBehaviour> keyValuePair in _singletons)
                 {
-                    singletons.RemoveAt(i);
-
-                    i--;
+                    if (keyValuePair.Key.IsSubclassOf(type))
+                        return (T)keyValuePair.Value;
                 }
+
+                T instance = FindObjectOfType<T>();
+
+                if (instance != null)
+                {
+                    RegisterMonoBehaviourAsSingleton(instance);
+
+                    return instance;
+                }
+
+                return null;
             }
+        }
 
-            List<Type> nulledTypes = new List<Type>();
+        void Clean(Scene scene)
+        {
+            List<Type> missedTypes = new List<Type>();
 
-            foreach (KeyValuePair<Type, Singleton> singleton in _singletons)
+            foreach (KeyValuePair<Type, MonoBehaviour> singleton in _singletons)
             {
-                if (!singleton.Value._monoBehaviour)
-                    nulledTypes.Add(singleton.Key);
+                if (singleton.Value == null)
+                    missedTypes.Add(singleton.Key);
             }
 
-            for (int i = 0; i < nulledTypes.Count; i++)
-                _singletons.Remove(nulledTypes[i]);
+            foreach (Type missedType in missedTypes)
+            {
+                for (int i = 0; i < singletonsData.Count; i++)
+                {
+                    SingletonData singletonData = singletonsData[i];
+
+                    if (singletonData._type == missedType.AssemblyQualifiedName)
+                    {
+                        singletonsData.Remove(singletonData);
+
+                        break;
+                    }
+                }
+
+                _singletons.Remove(missedType);
+            }
         }
     }
 }

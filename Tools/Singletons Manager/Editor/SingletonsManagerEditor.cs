@@ -1,69 +1,142 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
-using UnityEngine;
 using UnityEditor;
 using UnityEditorInternal;
+using UnityEngine;
 
-namespace Tools.SingletonsManager
+namespace Utilities
 {
-    [CustomEditor(typeof(SingletonsManager), true)]
-    public class SingletonsManagerEditor : Editor
+    [CustomEditor(typeof(SingletonsManager))]
+    public class SingletonsManagerData : Editor
     {
-        #region Fields & Properties
+        #region Variables & Properties
 
         SerializedProperty singletonsData;
-		ReorderableList singletonsDataList;
+        ReorderableList singletonsDataList;
 
         #endregion
 
         void OnEnable()
         {
-            singletonsData = serializedObject.FindProperty("singletons");
+            singletonsData = serializedObject.FindProperty("singletonsData");
 
-			singletonsDataList = new ReorderableList(serializedObject, singletonsData, true, false, true, true)
+            singletonsDataList = new ReorderableList(serializedObject, singletonsData, true, false, true, true)
             {
                 drawElementCallback = (Rect position, int i, bool isActive, bool isFocused) =>
                 {
-                    EditorGUI.LabelField(new Rect(position.x, position.y, 54f, position.height), "Singletons");
-
                     SerializedProperty singletonData = singletonsData.GetArrayElementAtIndex(i);
+
+                    float labelWidth = 54f;
+
+                    EditorGUI.LabelField(new Rect(position.x, position.y, labelWidth, position.height), "Type");
+
+                    float fieldWidth = (position.width - labelWidth - 8f) / 2f;
 
                     SerializedProperty gameObject = singletonData.FindPropertyRelative("gameObject");
 
-					EditorGUI.PropertyField(new Rect(position.x + 60f, position.y + 3f, (position.width - 60f) / 2f - 2f, position.height), gameObject, GUIContent.none, true);
+                    EditorGUI.PropertyField(new Rect(position.x + labelWidth + fieldWidth + 8f, position.y + 3f, fieldWidth, position.height), gameObject, GUIContent.none, true);
 
-                    if (gameObject.objectReferenceValue != null)
+                    List<Type> types = new List<Type>
                     {
-                        List<UnityEngine.MonoBehaviour> monoBehaviours = new List<UnityEngine.MonoBehaviour>(((GameObject)gameObject.objectReferenceValue).GetComponents<UnityEngine.MonoBehaviour>());
+                        null
+                    };
 
-                        monoBehaviours.Insert(0, null);
+                    if (gameObject.objectReferenceValue == null)
+                        GUI.enabled = false;
+                    else
+                    {
+                        List<MonoBehaviour> monobehaviours = new List<MonoBehaviour>(((GameObject)gameObject.objectReferenceValue).GetComponents<MonoBehaviour>());
 
-                        int monoBehaviourIndex = 0;
-
-                        for (int j = 0; j < monoBehaviours.Count; j++)
+                        for (int j = 0; j < monobehaviours.Count; j++)
                         {
-                            SerializedProperty monoBehaviour = singletonData.FindPropertyRelative("monoBehaviour");
+                            Type type = monobehaviours[j].GetType();
 
-							if ((UnityEngine.MonoBehaviour)monoBehaviour.objectReferenceValue == monoBehaviours[j])
+                            types.Add(type);
+
+                            while (type.BaseType != typeof(MonoBehaviour))
                             {
-                                monoBehaviourIndex = j;
+                                type = type.BaseType;
+
+                                types.Add(type);
+                            }
+                        }
+                    }
+
+                    int typeIndex = 0;
+
+                    string currentType = singletonData.FindPropertyRelative("type").stringValue;
+
+                    if (currentType != SingletonData._defaultType)
+                    {
+                        for (int j = 1; j < types.Count; j++)
+                        {
+                            if (types[j].AssemblyQualifiedName == currentType)
+                            {
+                                typeIndex = j;
 
                                 break;
                             }
                         }
-
-                        monoBehaviourIndex = EditorGUI.Popup(new Rect(position.x + 60f + ((position.width - 60f) / 2f) + 4f, position.y + 3f, position.width - (60f + ((position.width - 60f) / 2f) + 4f), position.height), monoBehaviourIndex, Array.ConvertAll(monoBehaviours.ToArray(), (UnityEngine.MonoBehaviour monoBehaviour) =>
-                        {
-                            if (monoBehaviour == null)
-                                return "None";
-                            else
-                                return monoBehaviour.GetType().FullName;
-                        }));
-
-						singletonData.FindPropertyRelative("monoBehaviour").objectReferenceValue = monoBehaviours[monoBehaviourIndex];
                     }
+
+                    List<string> typesPath = new List<string>()
+                    {
+                        SingletonData._defaultType
+                    };
+
+                    if (gameObject.objectReferenceValue != null)
+                    {
+                        List<MonoBehaviour> monobehaviours = new List<MonoBehaviour>(((GameObject)gameObject.objectReferenceValue).GetComponents<MonoBehaviour>());
+
+                        for (int j = 0; j < monobehaviours.Count; j++)
+                        {
+                            Type type = monobehaviours[j].GetType();
+
+                            string typePath = type.FullName.Replace('.','/');
+
+                            typesPath.Add(typePath);
+
+                            while (type.BaseType != typeof(MonoBehaviour))
+                            {
+                                type = type.BaseType;
+
+                                string[] lastTypePath = typePath.Split(' ');
+
+                                if(lastTypePath.Length == 1 ) 
+                                {
+                                    List<string> nameSpaces = new List<string>(lastTypePath[0].Split('/'));
+
+                                    if (nameSpaces.Count >= 2)
+                                    {
+                                        lastTypePath[lastTypePath.Length - 1] = nameSpaces[nameSpaces.Count - 1];
+
+                                        nameSpaces.RemoveAt(nameSpaces.Count - 1);
+
+                                        lastTypePath[lastTypePath.Length - 1] = $"{string.Join("/", nameSpaces.ToArray())}/({lastTypePath[lastTypePath.Length - 1]})";
+                                    }
+                                    else
+                                        lastTypePath[lastTypePath.Length - 1] = $"({lastTypePath[lastTypePath.Length - 1]})";
+                                }
+                                else
+                                    lastTypePath[lastTypePath.Length - 1] = $"({lastTypePath[lastTypePath.Length - 1]})";
+
+                                typePath = string.Join(" ", lastTypePath);
+
+                                typePath = $"{typePath} {type.Name}";
+
+                                typesPath.Add(typePath);
+                            }
+                        }
+                    }
+
+                    typeIndex = EditorGUI.Popup(new Rect(position.x + labelWidth, position.y + 3f, fieldWidth, position.height), typeIndex, typesPath.ToArray());
+
+                    currentType = singletonData.FindPropertyRelative("type").stringValue = (typeIndex == 0) ? "None" : types[typeIndex].AssemblyQualifiedName;  
+
+                    if(!GUI.enabled)
+                        GUI.enabled = true;
                 },
-			};
+            };
         }
 
         public override void OnInspectorGUI()
@@ -78,14 +151,14 @@ namespace Tools.SingletonsManager
 
             EditorGUILayout.Space(EditorGUIUtility.standardVerticalSpacing * 3f);
 
-            SerializedProperty singletons = serializedObject.FindProperty("singletons");
+            SerializedProperty singletonsData = serializedObject.FindProperty("singletonsData");
 
-			singletons.isExpanded = EditorGUILayout.BeginFoldoutHeaderGroup(singletons.isExpanded, "Singletons");
+            singletonsData.isExpanded = EditorGUILayout.BeginFoldoutHeaderGroup(singletonsData.isExpanded, "Singletons");
 
-			EditorGUILayout.Space(EditorGUIUtility.standardVerticalSpacing);
+            EditorGUILayout.Space(EditorGUIUtility.standardVerticalSpacing);
 
-			if (singletons.isExpanded)
-                this.singletonsDataList.DoLayoutList();
+            if (singletonsData.isExpanded)
+                singletonsDataList.DoLayoutList();
 
             EditorGUILayout.EndFoldoutHeaderGroup();
 

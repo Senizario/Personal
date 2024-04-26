@@ -1,17 +1,13 @@
 using UnityEngine;
 
-namespace Tools.SingletonsManager
+namespace Utilities
 {
     public class MonoBehaviourSingleton : MonoBehaviour
     {
-        #region Fields & Properties
+        #region Variables & Properties
 
-        [Header("Fields & Properties (MonoBehaviourSingleton)")]
+        [Header("Members & Properties")]
         [SerializeField] bool permanent;
-        public bool _permanent
-        {
-            get => permanent;
-        }
 
         #endregion
 
